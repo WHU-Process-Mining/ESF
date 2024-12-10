@@ -38,7 +38,9 @@ Here, Two training methods are provided here:
     python execute/ESF/run_ESF.py
     ```
 ## Test
-    ```bash
+
+Evaluate the model:
+
     python execute/ESF/test_ESF.py
-    ```
+
 
