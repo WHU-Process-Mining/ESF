@@ -31,14 +31,14 @@ Here, Two training methods are provided here:
 1. Specify Hyperparameters:
     Specify model_parameters in   configs/ESF_Model.yaml.
     ```bash
-    python excute/ESF/train_ESF.py
+    python execute/ESF/train_ESF.py
     ```
 2. Use Optuna for Hyperparameter Optimization:
     ```bash
-    python excute/ESF/run_ESF.py
+    python execute/ESF/run_ESF.py
     ```
 ## Test
     ```bash
-    python excute/ESF/test_ESF.py
+    python execute/ESF/test_ESF.py
     ```
 
