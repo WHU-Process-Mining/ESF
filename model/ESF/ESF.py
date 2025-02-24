@@ -71,7 +71,15 @@ class EnableStateFilterModel(nn.Module):
     def get_input_feature(self, batch_data):
         # batch_data:(B, dim, max_len)
         activity_feature = batch_data[:, 0, :].long()
-        activity_embeddings = self.activity_embedding(activity_feature)
+        unseen_idx = activity_feature == (self.activity_num + 1)
+        if unseen_idx.any():
+            activity_feature = torch.clamp(activity_feature, min=0, max=self.activity_num)
+            activity_embeddings = self.activity_embedding(activity_feature)
+            unseen_activity_embedding = torch.mean(self.activity_embedding.weight[1:],dim=0)
+            activity_embeddings[unseen_idx] = unseen_activity_embedding
+        else:
+            activity_embeddings = self.activity_embedding(activity_feature)
+
         time_feature = torch.permute(batch_data[:, 1:5, :], (0, 2, 1))
 
         category_embeddings = [activity_embeddings]
@@ -79,7 +87,16 @@ class EnableStateFilterModel(nn.Module):
         for i, attr_num in enumerate(self.add_attr_num):
             add_feature = batch_data[:, 5 + i, :]
             if attr_num > 0:
-                category_embeddings.append(self.add_attr_embeddings[i](add_feature.long()))
+                catogery_feature = add_feature.long()
+                unseen_idx = catogery_feature == (attr_num + 1)
+                if unseen_idx.any():
+                    catogery_feature = torch.clamp(catogery_feature, min=0, max=attr_num)
+                    category_embedding = self.add_attr_embeddings[i](catogery_feature)
+                    unseen_embedding = torch.mean(self.add_attr_embeddings[i].weight[1:],dim=0)
+                    category_embedding[unseen_idx] = unseen_embedding
+                    category_embeddings.append(category_embedding)
+                else:
+                    category_embeddings.append(self.add_attr_embeddings[i](catogery_feature))
             else:
                 numeric_embeddings.append(torch.unsqueeze(add_feature, dim=2))
 

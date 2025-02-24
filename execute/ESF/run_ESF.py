@@ -36,7 +36,7 @@ def ESF_parameters(trial, cfg):
     return model_parameters
 
 
-def objective(trial, idx, cfg_parameters, train_dataset, val_dataset, save_folder): 
+def objective(trial, cfg_parameters, train_dataset, val_dataset, save_folder): 
     model_parameters = ESF_parameters(trial, cfg_parameters)
     device = 'cuda:'+ cfg_parameters['device_id'] if torch.cuda.is_available() else 'cpu'
     model = EnableStateFilterModel(
@@ -53,12 +53,12 @@ def objective(trial, idx, cfg_parameters, train_dataset, val_dataset, save_folde
     best_model, best_val_accurace, _, _, _ = train_model(train_dataset, val_dataset, model, model_parameters, device, trial)
     current_best = trial.study.best_value if trial.number > 0 else 0
     if best_val_accurace > current_best:
-        with open( f'{save_folder}/model/best_model_kfd{idx}.pth', 'wb') as fout:
+        with open( f'{save_folder}/model/best_model.pth', 'wb') as fout:
             torch.save(best_model, fout)
 
     duartime = time.time() - start_time
    
-    record_file = open(f'{save_folder}/optimize/opt_history_{idx}.txt', 'a')
+    record_file = open(f'{save_folder}/optimize/opt_history.txt', 'a')
     record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['threshold']},{model_parameters['dropout']},{model_parameters['alpha']},{duartime}")
     record_file.close()
     
@@ -75,54 +75,54 @@ if __name__ == "__main__":
     model_cfg = cfg_model_train['model_parameters']
     model_cfg['device_id'] = '0'
     
-    data_path = '{}/{}/process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
-    save_folder = 'results_kfold_{}/{}/{}/'.format(dataset_cfg['k_fold_num'], model_cfg['model_name'], dataset_cfg['dataset'])
+    data_path = '{}/{}/time-process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
+    save_folder = 'results/{}/{}/'.format(model_cfg['model_name'], dataset_cfg['dataset'])
     
     os.makedirs(f'{save_folder}/optimize', exist_ok=True)
     os.makedirs(f'{save_folder}/model', exist_ok=True)
     
-    for idx in range(dataset_cfg['k_fold_num']):
-        # record optimization
-        record_file = open(f'{save_folder}/optimize/opt_history_{idx}.txt', 'w')
-        record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,threshold,dropout,alpha,duartime")
-        record_file.close()
-        
-        train_file_name = data_path + '/kfoldcv_' + str(idx) + '_train.csv'   
-        test_file_name = data_path + '/kfoldcv_' + str(idx) + '_test.csv'
-        
-        train_df = pd.read_csv(train_file_name)
-        test_df = pd.read_csv(test_file_name)
+    
+    # record optimization
+    record_file = open(f'{save_folder}/optimize/opt_history.txt', 'w')
+    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,threshold,dropout,alpha,duartime")
+    record_file.close()
+    
+    train_file_name = data_path + 'train.csv'   
+    test_file_name = data_path + 'test.csv'
+    
+    train_df = pd.read_csv(train_file_name)
+    test_df = pd.read_csv(test_file_name)
 
-        event_log = EventLogData(pd.concat([train_df, test_df]), is_multi_attr=True)
-        train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
-        train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
-        val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
+    event_log = EventLogData(train_df, is_multi_attr=True)
+    # spilit the dataset
+    train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
+    train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
+    val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
+    
+    model_cfg['activity_num'] = len(event_log.all_activities)
+    model_cfg['add_attr_num'] = event_log.add_attr_num
+    max_len = event_log.feature_dict['max_len']
+    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
+    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
 
-        model_cfg['activity_num'] = len(event_log.all_activities)
-        model_cfg['add_attr_num'] = event_log.add_attr_num
-        max_len = event_log.feature_dict['max_len']
-        train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
-        val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
+    print(f"seed: {cfg_model_train['seed']}")
+    print(f"dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
+    study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=cfg_model_train['seed'])) # fixed parameter
+    study.optimize(lambda trial: objective(trial, model_cfg, train_dataset, val_dataset, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
+    
+    # record optimization history
+    history = optuna.visualization.plot_optimization_history(study)
+    plot_optimization_history(study).write_image(f"{save_folder}/optimize/opt_history.png")
+    
+    outfile = open(f'{save_folder}/model/best_model.txt', 'w')
+    best_params = study.best_params
+    best_accurace = study.best_value
 
-        print(f"seed: {cfg_model_train['seed']}")
-        print(f"fold: {idx+1}, dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
-        study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=cfg_model_train['seed'])) # fixed parameter
-        study.optimize(lambda trial: objective(trial, idx, model_cfg, train_dataset, val_dataset, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
-        
-        # record optimization history
-        history = optuna.visualization.plot_optimization_history(study)
-        plot_optimization_history(study).write_image(f"{save_folder}/optimize/opt_history_{idx}.png")
-        
-        outfile = open(f'{save_folder}/model/best_model_kfd{idx}.txt', 'w')
-        best_params = study.best_params
-        best_accurace = study.best_value
-
-        print("Best hyperparameters:", best_params)
-        print("Best accurace:", best_accurace)
-        
-        outfile.write('Random Seed:' + str(cfg_model_train['seed']))
-        outfile.write('\nBest trail:' + str(study.best_trial.number))
-        outfile.write('\nBest hyperparameters:' + str(best_params))
-        outfile.write('\nBest accurace:' + str(best_accurace))
-        outfile.close()
-        
+    print("Best hyperparameters:", best_params)
+    print("Best accurace:", best_accurace)
+    
+    outfile.write('Random Seed:' + str(cfg_model_train['seed']))
+    outfile.write('\nBest trail:' + str(study.best_trial.number))
+    outfile.write('\nBest hyperparameters:' + str(best_params))
+    outfile.write('\nBest accurace:' + str(best_accurace))
+    outfile.close()

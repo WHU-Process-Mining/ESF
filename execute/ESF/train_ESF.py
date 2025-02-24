@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/inspur/zhengchao/ESF')
+sys.path.append('/home/inspur/zhengchao/PPM/approach')
 
 import torch
 import os
@@ -21,45 +21,45 @@ if __name__ == "__main__":
     dataset_cfg = cfg_model_train['data_parameters']
     model_cfg = cfg_model_train['model_parameters']
 
-    data_path = '{}/{}/process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
-    save_folder = 'results_kfold_{}/{}/{}/'.format(dataset_cfg['k_fold_num'], model_cfg['model_name'], dataset_cfg['dataset'])
+    data_path = '{}/{}/time-process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
+    save_folder = 'results/{}/{}/'.format(model_cfg['model_name'], dataset_cfg['dataset'])
     
     os.makedirs(save_folder + f'/model', exist_ok=True)
     os.makedirs(save_folder + f'/curves', exist_ok=True)
         
-    print("************* Training in different k-fold dataset ***************")
-    for idx in range(dataset_cfg['k_fold_num']):
+    print("************* Training***************")
 
-        train_file_name = data_path + '/kfoldcv_' + str(idx) + '_train.csv'   
-        test_file_name = data_path + '/kfoldcv_' + str(idx) + '_test.csv'
-        
-        train_df = pd.read_csv(train_file_name)
-        test_df = pd.read_csv(test_file_name)
+    train_file_name = data_path + 'train.csv'   
+    test_file_name = data_path + 'test.csv'
+    
+    train_df = pd.read_csv(train_file_name)
+    test_df = pd.read_csv(test_file_name)
 
-        event_log = EventLogData(pd.concat([train_df, test_df]), is_multi_attr=True)
-        train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
-        train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
-        val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
-        
-        model_cfg['activity_num'] = len(event_log.all_activities)
-        model_cfg['add_attr_num'] = event_log.add_attr_num
-        max_len = event_log.feature_dict['max_len']
-        train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
-        val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
+    event_log = EventLogData(train_df, is_multi_attr=True)
+    # spilit the dataset
+    train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
+    train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
+    val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
+    
+    model_cfg['activity_num'] = len(event_log.all_activities)
+    model_cfg['add_attr_num'] = event_log.add_attr_num
+    max_len = event_log.feature_dict['max_len']
+    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
+    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
 
-        model = EnableStateFilterModel(
-                activity_num=model_cfg['activity_num'],
-                dimension=model_cfg['dimension'],
-                hidden_size_1=model_cfg['hidden_size'],
-                hidden_size_2=model_cfg['hidden_size'],
-                add_attr_num = model_cfg['add_attr_num'],
-                threshold=model_cfg['threshold'],
-                dropout=model_cfg['dropout'],
-                ).to(device)
-        
-        best_model, best_val_accurace, train_loss_plt, train_accuracy_plt, val_accuracy_plt = train_model(train_dataset, val_dataset, model, model_cfg, device)
+    model = EnableStateFilterModel(
+            activity_num=model_cfg['activity_num'],
+            dimension=model_cfg['dimension'],
+            hidden_size_1=model_cfg['hidden_size'],
+            hidden_size_2=model_cfg['hidden_size'],
+            add_attr_num = model_cfg['add_attr_num'],
+            threshold=model_cfg['threshold'],
+            dropout=model_cfg['dropout'],
+            ).to(device)
+    
+    best_model_dict, best_val_accurace, train_loss_plt, train_accuracy_plt, val_accuracy_plt = train_model(train_dataset, val_dataset, model, model_cfg, device)
 
-        # print the loss and accurace curve
-        generate_graph(save_folder + f'/curves/curve_kfd{idx}.jpg', train_loss_plt, train_accuracy_plt, val_accuracy_plt)
-        with open( f'{save_folder}/model/best_model_kfd{idx}.pth', 'wb') as fout:
-            torch.save(best_model, fout)
+    # print the loss and accurace curve
+    generate_graph(save_folder + f'/curves/curve.jpg', train_loss_plt, train_accuracy_plt, val_accuracy_plt)
+    with open( f'{save_folder}/model/best_model.pth', 'wb') as fout:
+        torch.save(best_model_dict, fout)

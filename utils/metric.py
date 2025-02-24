@@ -6,7 +6,7 @@ import os
 def metric_calculate(truth_list, prediction_list):
     accuracy = metrics.accuracy_score(truth_list, prediction_list)
     precision, recall, fscore, _ = metrics.precision_recall_fscore_support(
-                    truth_list, prediction_list, average="weighted", zero_division=0)
+                    truth_list, prediction_list, average="macro", zero_division=0)
     return accuracy, precision, recall, fscore
 
 class EvaluationMetric():
@@ -14,28 +14,38 @@ class EvaluationMetric():
         self.save_file = save_file
         self.max_case_length = max_case_length
     
-    def prefix_metric_calculate(self, truth_list, prediction_list, length_list):
+    def prefix_metric_calculate(self, truth_list, prediction_list, prefix_suf_variant_list):
 #       Evaluate over all the prefixes (k) and save the results
         k, size, accuracies,fscores, precisions, recalls = [],[],[],[],[],[]
         idxs = []
         
-        for i in range(1,self.max_case_length+1):
-            idx = np.where(np.array(length_list) == i)[0]
-            if len(idx) > 0:
-                accuracy, precision, recall, fscore = metric_calculate(np.array(truth_list)[idx], np.array(prediction_list)[idx])
-                k.append(i)
-                size.append(len(idx))
-                accuracies.append(accuracy)
-                fscores.append(fscore)
-                precisions.append(precision)
-                recalls.append(recall)
-                print("prefix size:{}, involved sample size:{}".format(i, len(idx)))
-                idxs.extend(idx)
+        prefix_suffix_predict = {}
+        prefix_suffix_label = {}
+
+        for i in range(len(truth_list)):
+            prefix_suffix_num = prefix_suf_variant_list[i]
+            if prefix_suffix_num not in prefix_suffix_predict:
+                prefix_suffix_predict[prefix_suffix_num] = [prediction_list[i]]
+                prefix_suffix_label[prefix_suffix_num] = [truth_list[i]]
+            else:
+                prefix_suffix_predict[prefix_suffix_num].append(prediction_list[i])
+                prefix_suffix_label[prefix_suffix_num].append(truth_list[i])
         
-        accuracy, precision, recall, fscore = metric_calculate(np.array(truth_list)[idxs], np.array(prediction_list)[idxs])
+        for prefix_suffix_num, predictions in prefix_suffix_predict.items():
+            grounds = prefix_suffix_label[prefix_suffix_num]
+            accuracy, precision, recall, fscore = metric_calculate(grounds, predictions)
+            k.append(prefix_suffix_num)
+            size.append(len(predictions))
+            accuracies.append(accuracy)
+            fscores.append(fscore)
+            precisions.append(precision)
+            recalls.append(recall)
+            print("prefix_var_num:{}, involved sample size:{}".format(prefix_suffix_num, len(predictions)))
         
-        k.append(self.max_case_length+1)
-        size.append(len(idxs))
+        accuracy, precision, recall, fscore = metric_calculate(truth_list, prediction_list)
+        
+        k.append(max(prefix_suffix_predict.keys())+1)
+        size.append(len(truth_list))
         accuracies.append(accuracy)
         precisions.append(precision)
         recalls.append(recall)
@@ -44,8 +54,19 @@ class EvaluationMetric():
         print('Average accuracy across all prefixes:', accuracy)
         print('Average precision across all prefixes:', precision)
         print('Average recall across all prefixes:', recall)   
-        print('Average f-score across all prefixes:', fscore)
-
-        results_df = pd.DataFrame({"k":k, "sample size":size, "accuracy":accuracies, 
+        print('Average f-score across all prefixes:', fscore) 
+        
+        if os.path.exists(self.save_file):
+            df = pd.read_csv(self.save_file)
+            old_acc = df.iloc[-1]['accuracy']
+        else:
+            old_acc = 0.0
+        
+        if accuracy>old_acc:
+            results_df = pd.DataFrame({"suffix_var_num":k, "sample size":size, "accuracy":accuracies, 
                 "precision":precisions, "recall":recalls,  "fscore": fscores,})
-        results_df.to_csv(self.save_file, index=False)
+            results_df.sort_values(by="suffix_var_num", inplace=True)
+            results_df.to_csv(self.save_file, index=False)
+            return True
+        else:
+            return False

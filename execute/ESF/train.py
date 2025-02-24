@@ -3,7 +3,6 @@ import random
 import optuna
 import numpy as np
 from torch import optim
-from copy import deepcopy
 from torch.utils.data import DataLoader
 from utils.metric import metric_calculate
 from model.loss import ESFLoss, create_targets_stage2
@@ -92,7 +91,7 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         if epoch == 0 or val_accurace >= best_val_accuracy:
             best_val_accuracy =  val_accurace
             patience_count = 0
-            best_model = deepcopy(model)
+            best_model_dict = model.state_dict()
         else:
             patience_count += 1
         
@@ -108,4 +107,4 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
                 raise optuna.TrialPruned()
         
     print(f"best val_accuracy:{best_val_accuracy} ")
-    return best_model, best_val_accuracy, train_loss_plt, train_accuracy_plt, val_accuracy_plt
+    return best_model_dict, best_val_accuracy, train_loss_plt, train_accuracy_plt, val_accuracy_plt
