@@ -6,8 +6,9 @@ data_parameters:
   # dataset: 'BPIC2020_PrepaidTravelCost'
   # dataset: 'BPIC2020_InternationalDeclarations'
   # dataset: 'BPIC2020_DomesticDeclarations'
-  # dataset: 'BPIC2020_RequestForPayment'
-  dataset: 'Sepsis'
+  dataset: 'BPIC2020_RequestForPayment'
+  # dataset: 'Sepsis'
+  # dataset: 'BPI2015_1'
   valid_ratio: 0.2
 
 model_parameters:
@@ -17,8 +18,7 @@ model_parameters:
   num_epochs: 300
   dimension: 64
   hidden_size: 128
-  threshold: 0.2
   dropout: 0.5
   learning_rate: 0.001
-  max_patience_num: 50
+  max_patience_num: 24
   alpha: 10

@@ -48,9 +48,10 @@ def create_targets_stage2(future_activities, num_activities):
     return targets_stage2
 
 class ESFLoss(nn.Module):
-    def __init__(self, alpha=0.1):
+    def __init__(self, alpha=0.1, exp_factor=2):
         super(ESFLoss, self).__init__()
         self.alpha = alpha          # 第一阶段损失的权重
+        self.exp_factor = exp_factor
         # 定义第一阶段的损失函数（二元交叉熵损失）
         self.bce_loss = nn.BCELoss()
         # 定义第二阶段的损失函数（交叉熵损失）
@@ -67,36 +68,11 @@ class ESFLoss(nn.Module):
         targets_stage2 = create_targets_stage2(targets, num_activities)
         # loss
         loss_stage1 = self.bce_loss(enable_state, targets_stage1)
+        weighted_loss_stage1  = (loss_stage1 * torch.exp(self.exp_factor * enable_state)).mean()
         loss_stage2 = self.ce_loss(prediction, targets_stage2)
         
         # 总损失
-        total_loss = self.alpha * loss_stage1 + loss_stage2
+        total_loss = self.alpha * weighted_loss_stage1  + loss_stage2
         
-        return self.alpha * loss_stage1, loss_stage2, total_loss
+        return self.alpha * weighted_loss_stage1, loss_stage2, total_loss
 
-class ESFLoss_1(nn.Module):
-    def __init__(self, alpha=0.1):
-        super(ESFLoss_1, self).__init__()
-        self.alpha = alpha          # 第一阶段损失的权重
-        # 定义第一阶段的损失函数（二元交叉熵损失）
-        self.bce_loss = nn.BCEWithLogitsLoss()
-        # 定义第二阶段的损失函数（交叉熵损失）
-        self.ce_loss = nn.CrossEntropyLoss()
-    
-    def forward(self, outputs, targets):
-        """
-        outputs: enable activity (batch_size, num_activities), prediction probility(batch_size, num_activities)
-        targets: activities in future windows (batch_size, future_ws)
-        """
-        enable_state, prediction = outputs
-        num_activities = enable_state.shape[1]
-        targets_stage1 = create_targets_stage1(targets, num_activities)
-        targets_stage2 = create_targets_stage2(targets, num_activities)
-        # loss
-        loss_stage1 = self.bce_loss(enable_state, targets_stage1)
-        loss_stage2 = self.ce_loss(prediction, targets_stage2)
-        
-        # 总损失
-        total_loss = self.alpha * loss_stage1 + loss_stage2
-        
-        return self.alpha * loss_stage1, loss_stage2, total_loss

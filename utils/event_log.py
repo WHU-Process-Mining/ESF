@@ -105,44 +105,44 @@ class EventLogData():
         df['time:timestamp'] = pd.to_datetime(df['time:timestamp'], format='%Y-%m-%d %H:%M:%S', utc=True)
         input_data_list = [] # [[[activity_seq][time_seq]...[]]]
         future_activity_list = [] # [[activity_seq]]
+        max_len = self.feature_dict['max_len']
         for case_id in all_cases:
             case_row = df[df['case:concept:name'] == case_id]
             case_row = case_row.sort_values(by=['time:timestamp'])
+            if len(case_row)<=max_len:
+                # Get the activity sequence and time sequence
+                activity_map = self.feature_dict['activity']
+                activity_seq = case_row['concept:name'].to_list()
+                activity_seq = [activity_map.get(activity, len(activity_map) + 1) for activity in activity_seq]
+                time_seq = case_row['time:timestamp'].to_list()
+                if len(activity_seq) <2:
+                    raise ValueError("Invalid sequence length < 2")
+                feature_list = [activity_seq, time_seq]
+                # add the additional attributes list
+                if self.is_multi_attr:
+                    for attr_name in self.add_attr_names:
+                        if self.feature_dict[attr_name]['is_numeric']:
+                            min_value = self.feature_dict[attr_name]['min']
+                            max_value = self.feature_dict[attr_name]['max']
+                            mean_value = self.feature_dict[attr_name]['mean']
+                            attr_seq=  df[attr_name].fillna(mean_value).to_list()
+                            feature_seq = [(i-min_value)/(max_value-min_value) for i in attr_seq]
+                        else:
+                            attr_seq=  df[attr_name].fillna('Missing_MVs').to_list()
+                            mapping = self.feature_dict[attr_name]['mapping']  # category attr dict
+                            feature_seq = [mapping.get(str(item), len(mapping) + 1) if isinstance(item, float) and math.isnan(item) else mapping.get(item, len(mapping) + 1) for item in attr_seq]
+                        feature_list.append(feature_seq)
 
-            # Get the activity sequence and time sequence
-            activity_map = self.feature_dict['activity']
-            activity_seq = case_row['concept:name'].to_list()
-            activity_seq = [activity_map.get(activity, len(activity_map) + 1) for activity in activity_seq]
-            time_seq = case_row['time:timestamp'].to_list()
-            if len(activity_seq) <2:
-                raise ValueError("Invalid sequence length < 2")
-            feature_list = [activity_seq, time_seq]
-            # add the additional attributes list
-            if self.is_multi_attr:
-                for attr_name in self.add_attr_names:
-                    if self.feature_dict[attr_name]['is_numeric']:
-                        min_value = self.feature_dict[attr_name]['min']
-                        max_value = self.feature_dict[attr_name]['max']
-                        mean_value = self.feature_dict[attr_name]['mean']
-                        attr_seq=  df[attr_name].fillna(mean_value).to_list()
-                        feature_seq = [(i-min_value)/(max_value-min_value) for i in attr_seq]
-                    else:
-                        attr_seq=  df[attr_name].fillna('Missing_MVs').to_list()
-                        mapping = self.feature_dict[attr_name]['mapping']  # category attr dict
-                        feature_seq = [mapping.get(str(item), len(mapping) + 1) if isinstance(item, float) and math.isnan(item) else mapping.get(item, len(mapping) + 1) for item in attr_seq]
-                    feature_list.append(feature_seq)
-
-            is_valids = case_row['predictable'].to_list()
-            max_len = self.feature_dict['max_len']
-            for i in range(1, len(activity_seq)):
-                prefix_feature = []
-                if is_valids[i] == 1 and i<=max_len:
-                    for feature in feature_list:
-                        prefix_feature.append(feature[:i])
-                    input_data_list.append(prefix_feature)
-                    if (i+future_wz) >= len(activity_seq):
-                        future_activity_list.append(activity_seq[i:])
-                    else:
-                        future_activity_list.append(activity_seq[i:i+future_wz])
+                is_valids = case_row['predictable'].to_list()
+                for i in range(1, len(activity_seq)):
+                    prefix_feature = []
+                    if is_valids[i] == 1:
+                        for feature in feature_list:
+                            prefix_feature.append(feature[:i])
+                        input_data_list.append(prefix_feature)
+                        if (i+future_wz) >= len(activity_seq):
+                            future_activity_list.append(activity_seq[i:])
+                        else:
+                            future_activity_list.append(activity_seq[i:i+future_wz])
                 
         return [input_data_list, future_activity_list]

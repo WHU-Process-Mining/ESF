@@ -91,7 +91,7 @@ if __name__ == "__main__":
             hidden_size_1=hyperparameters['hidden_size_1'],
             hidden_size_2=hyperparameters['hidden_size_2'],
             add_attr_num = model_cfg['add_attr_num'],
-            threshold=hyperparameters['threshold'],
+            top_k=hyperparameters['future_window_size'],
             dropout=hyperparameters['dropout'],
             ).to(device)
     

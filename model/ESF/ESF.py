@@ -4,7 +4,7 @@ import torch.nn as nn
 class EnableStateModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_activities, dropout, num_layers=2):
         super(EnableStateModel, self).__init__()
-        self.rnn = nn.GRU(input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.ln = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_size, num_activities)
@@ -22,14 +22,14 @@ class EnableStateModel(nn.Module):
         return out
 
 class PredictionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_activities, dropout, threshold, num_layers=1):
+    def __init__(self, input_size, hidden_size, num_activities, dropout, top_k, num_layers=1):
         super(PredictionModel, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(hidden_size)
         self.fc = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
-        self.threshold = threshold
+        self.top_k = top_k
     
     def forward(self, x, first_stage_scores):
         rnn_out, _ = self.rnn(x)
@@ -38,7 +38,13 @@ class PredictionModel(nn.Module):
         all_activities_output = self.relu(self.fc(final_hidden_state))
     
         # 创建启用活动的掩码
-        activity_mask = (first_stage_scores >= self.threshold)
+
+        # 选择前 k 个最大可能性的活动
+        top_k_values, top_k_indices = torch.topk(first_stage_scores, self.top_k, dim=-1)
+        
+        # 创建启用活动的掩码
+        activity_mask = torch.zeros_like(all_activities_output, dtype=torch.bool)
+        activity_mask.scatter_(-1, top_k_indices, 1)
         
         # 对 logits 应用掩码
         masked_logits = all_activities_output.masked_fill(~activity_mask, -1e4)
@@ -47,7 +53,7 @@ class PredictionModel(nn.Module):
 
 
 class EnableStateFilterModel(nn.Module):
-    def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, threshold, dropout):
+    def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, top_k, dropout):
         super(EnableStateFilterModel, self).__init__()
         self.activity_num = activity_num
         self.dimension = dimension
@@ -66,7 +72,7 @@ class EnableStateFilterModel(nn.Module):
         numeric_dimension = add_attr_num.count(0) + 4  # 数值特征数量（额外特征中的数值特征 + 时间特征）
         self.input_feature_size = embed_dimension + numeric_dimension
         self.stage1 = EnableStateModel(dimension, hidden_size_1, activity_num, dropout)
-        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, dropout, threshold)
+        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, dropout, top_k)
 
     def get_input_feature(self, batch_data):
         # batch_data:(B, dim, max_len)

@@ -40,7 +40,7 @@ class EvaluationMetric():
             fscores.append(fscore)
             precisions.append(precision)
             recalls.append(recall)
-            print("prefix_var_num:{}, involved sample size:{}".format(prefix_suffix_num, len(predictions)))
+            print("prefix_var_num:{}, involved sample size:{}, accuracy:{}".format(prefix_suffix_num, len(predictions), accuracy))
         
         accuracy, precision, recall, fscore = metric_calculate(truth_list, prediction_list)
         

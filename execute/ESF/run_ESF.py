@@ -22,8 +22,8 @@ def ESF_parameters(trial, cfg):
     model_parameters['dimension'] = trial.suggest_categorical('dimension', [16, 32, 64, 128])
     model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [64, 128, 256, 512])
     model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [64, 128, 256, 512])
-    # model_parameters['threshold'] = trial.suggest_categorical('threshold', [0.1, 0.2, 0.3, 0.4, 0.5])
-    model_parameters['threshold'] = trial.suggest_float('threshold', 0, 1)
+    model_parameters['future_window_size'] = trial.suggest_categorical('future_window_size', [2,3,4,5,6,7])
+    # model_parameters['threshold'] = trial.suggest_float('threshold', 0, 1)
     model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
     model_parameters['alpha'] = trial.suggest_float('alpha', 1e1, 1e5, log=True)
     
@@ -36,8 +36,17 @@ def ESF_parameters(trial, cfg):
     return model_parameters
 
 
-def objective(trial, cfg_parameters, train_dataset, val_dataset, save_folder): 
+def objective(trial, cfg_parameters, train_df, val_df, save_folder): 
     model_parameters = ESF_parameters(trial, cfg_parameters)
+
+    train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
+    val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
+    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
+    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
+
+    print(f"seed: {cfg_model_train['seed']}")
+    print(f"dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
+
     device = 'cuda:'+ cfg_parameters['device_id'] if torch.cuda.is_available() else 'cpu'
     model = EnableStateFilterModel(
                 activity_num=model_parameters['activity_num'],
@@ -45,7 +54,7 @@ def objective(trial, cfg_parameters, train_dataset, val_dataset, save_folder):
                 hidden_size_1=model_parameters['hidden_size_1'],
                 hidden_size_2=model_parameters['hidden_size_2'],
                 add_attr_num=model_parameters['add_attr_num'],
-                threshold=model_parameters['threshold'],
+                top_k=model_parameters['future_window_size'],
                 dropout=model_parameters['dropout']).to(device)
     
     start_time = time.time()
@@ -59,7 +68,7 @@ def objective(trial, cfg_parameters, train_dataset, val_dataset, save_folder):
     duartime = time.time() - start_time
    
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'a')
-    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['threshold']},{model_parameters['dropout']},{model_parameters['alpha']},{duartime}")
+    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['future_window_size']},{model_parameters['dropout']},{model_parameters['alpha']},{duartime}")
     record_file.close()
     
     return best_val_accurace
@@ -84,7 +93,7 @@ if __name__ == "__main__":
     
     # record optimization
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'w')
-    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,threshold,dropout,alpha,duartime")
+    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,future_window_size,dropout,alpha,duartime")
     record_file.close()
     
     train_file_name = data_path + 'train.csv'   
@@ -96,19 +105,13 @@ if __name__ == "__main__":
     event_log = EventLogData(train_df, is_multi_attr=True)
     # spilit the dataset
     train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
-    train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
-    val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
     
     model_cfg['activity_num'] = len(event_log.all_activities)
     model_cfg['add_attr_num'] = event_log.add_attr_num
     max_len = event_log.feature_dict['max_len']
-    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
-    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
-
-    print(f"seed: {cfg_model_train['seed']}")
-    print(f"dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
+    
     study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=cfg_model_train['seed'])) # fixed parameter
-    study.optimize(lambda trial: objective(trial, model_cfg, train_dataset, val_dataset, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
+    study.optimize(lambda trial: objective(trial, model_cfg, train_df, val_df, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
     
     # record optimization history
     history = optuna.visualization.plot_optimization_history(study)

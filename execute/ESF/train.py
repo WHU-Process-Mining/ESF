@@ -88,8 +88,10 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         print(f"epoch: {epoch}, train_total_loss:{training_loss/num_train}, train_stage1_loss:{training_stg1_loss/num_train}, train_stage2_loss:{training_stg2_loss/num_train}, train_accurace:{train_accurace}, val_accurace:{val_accurace},train_fscore:{train_fscore}, val_fscore:{val_fscore}")
         
         # Early Stop
+        
         if epoch == 0 or val_accurace >= best_val_accuracy:
-            best_val_accuracy =  val_accurace
+            if epoch > 5:
+                best_val_accuracy =  val_accurace
             patience_count = 0
             best_model_dict = model.state_dict()
         else:

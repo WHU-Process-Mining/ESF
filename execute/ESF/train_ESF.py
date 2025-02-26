@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/inspur/zhengchao/PPM/approach')
+sys.path.append('/home/inspur/zhengchao/ESF')
 
 import torch
 import os
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     cfg_model_train = load_config_data("configs/ESF_Model.yaml")
     
     setup_seed(cfg_model_train['seed'])
-    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     dataset_cfg = cfg_model_train['data_parameters']
     model_cfg = cfg_model_train['model_parameters']
 
@@ -36,6 +36,7 @@ if __name__ == "__main__":
     test_df = pd.read_csv(test_file_name)
 
     event_log = EventLogData(train_df, is_multi_attr=True)
+    max_len = event_log.feature_dict['max_len']
     # spilit the dataset
     train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
     train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     
     model_cfg['activity_num'] = len(event_log.all_activities)
     model_cfg['add_attr_num'] = event_log.add_attr_num
-    max_len = event_log.feature_dict['max_len']
+    
     train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
     val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
 
@@ -53,7 +54,7 @@ if __name__ == "__main__":
             hidden_size_1=model_cfg['hidden_size'],
             hidden_size_2=model_cfg['hidden_size'],
             add_attr_num = model_cfg['add_attr_num'],
-            threshold=model_cfg['threshold'],
+            top_k=model_cfg['future_window_size'],
             dropout=model_cfg['dropout'],
             ).to(device)
     
