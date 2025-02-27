@@ -16,24 +16,41 @@ def setup_seed(seed):
     torch.backends.cudnn.benchmark = False # 
     torch.backends.cudnn.deterministic = True
 
+def analyse_suffix_variant(prefix_list, next_activity_list):
+    trace_dict = {}
+
+    for prefix, next_activity in zip(prefix_list, next_activity_list):
+        activity_prefix = prefix[0]
+        if tuple(activity_prefix) not in trace_dict:
+            trace_dict[tuple(activity_prefix)] = {}
+        if next_activity not in trace_dict[tuple(activity_prefix)]:
+            trace_dict[tuple(activity_prefix)][next_activity] =1
+        else:
+            trace_dict[tuple(activity_prefix)][next_activity] +=1
+    
+    print("Sample number:{}".format(len(prefix_list)))
+    print("Prefix number:{}".format(len(trace_dict)))
+
+    return trace_dict
+
 # Test the test data(val data)
 def test_model(test_dataset, model, model_parameters, device):
     predictions_list = []
     true_list = []
-    length_list = []
+    var_num_list = []
     test_dataloader = DataLoader(test_dataset, batch_size=model_parameters['batch_size'], shuffle=False)
     with torch.no_grad():
         model.eval()
-        for seq, targets in test_dataloader:
+        for seq, targets,soft_labels in test_dataloader:
             batch_data = seq.to(device)
             logits = model(batch_data)
             
-            true_list.extend((create_targets_stage2(targets, model_parameters['activity_num'])+1).tolist())
+            true_list.extend(targets.cpu().numpy().tolist())
             predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
-            lengths = torch.sum((seq[:, 0]) != 0, dim=1)
-            length_list.extend(lengths.tolist())
+            var_num = torch.sum(soft_labels > 0.01, dim=1)
+            var_num_list.extend(var_num.cpu().numpy().tolist())
     
-    return true_list, predictions_list, length_list
+    return true_list, predictions_list, var_num_list
 
 def train_model(train_dataset, val_dataset, model, model_parameters, device, trial=None):
     print("************* Training Model ***************")
@@ -60,16 +77,16 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         training_stg2_loss = 0
         num_train = 0
         
-        for seq, targets in train_dataloader:
+        for seq, targets, soft_labels in train_dataloader:
             batch_data = seq.to(device)
             logits = model(batch_data)
-            stg_1_loss, stg_2_loss, total_loss =  criterion(logits, targets.to(device))
+            stg_1_loss, stg_2_loss, total_loss =  criterion(logits, targets.to(device), soft_labels.to(device))
 
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
             
-            true_list.extend((create_targets_stage2(targets, model_parameters['activity_num'])+1).tolist())
+            true_list.extend(targets.cpu().numpy().tolist())
             predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
             
             num_train += 1

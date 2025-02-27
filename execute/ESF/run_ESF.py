@@ -12,21 +12,20 @@ from dataset.ESF_dataset import ESFDataset
 from model.ESF.ESF import EnableStateFilterModel
 from utils.event_log import EventLogData, split_valid_df
 from optuna.visualization import plot_optimization_history
-from execute.ESF.train import setup_seed, train_model
+from execute.ESF.train import setup_seed, train_model, analyse_suffix_variant
 from configs.config import load_config_data
 
 def ESF_parameters(trial, cfg):
     # define the parameter search space
     model_parameters = {}
     
-    model_parameters['dimension'] = trial.suggest_categorical('dimension', [16, 32, 64, 128])
-    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [64, 128, 256, 512])
-    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [64, 128, 256, 512])
-    model_parameters['future_window_size'] = trial.suggest_categorical('future_window_size', [2,3,4,5,6,7])
+    model_parameters['dimension'] = trial.suggest_categorical('dimension', [8, 16, 32, 64, 128])
+    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [32, 64, 128, 256])
+    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [32, 64, 128, 256])
     # model_parameters['threshold'] = trial.suggest_float('threshold', 0, 1)
     model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
-    model_parameters['alpha'] = trial.suggest_float('alpha', 1e1, 1e5, log=True)
-    
+    # model_parameters['alpha'] = trial.suggest_float('alpha', 1e-3, 1e3, log=True)
+    model_parameters['alpha'] = 1
     model_parameters['learning_rate'] = cfg['learning_rate']
     model_parameters['num_epochs'] = cfg['num_epochs']
     model_parameters['batch_size'] = cfg['batch_size']
@@ -36,13 +35,13 @@ def ESF_parameters(trial, cfg):
     return model_parameters
 
 
-def objective(trial, cfg_parameters, train_df, val_df, save_folder): 
+def objective(trial, cfg_parameters, train_df, val_df, trace_dict, save_folder): 
     model_parameters = ESF_parameters(trial, cfg_parameters)
 
-    train_data = event_log.generate_data_for_input(train_df, future_wz=model_cfg['future_window_size'])
-    val_data = event_log.generate_data_for_input(val_df, future_wz=model_cfg['future_window_size'])
-    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'])
-    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'])
+    train_data = event_log.generate_data_for_input(train_df)
+    val_data = event_log.generate_data_for_input(val_df)
+    train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'], model_parameters['activity_num'], trace_dict)
+    val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'], model_parameters['activity_num'], trace_dict)
 
     print(f"seed: {cfg_model_train['seed']}")
     print(f"dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
@@ -54,7 +53,6 @@ def objective(trial, cfg_parameters, train_df, val_df, save_folder):
                 hidden_size_1=model_parameters['hidden_size_1'],
                 hidden_size_2=model_parameters['hidden_size_2'],
                 add_attr_num=model_parameters['add_attr_num'],
-                top_k=model_parameters['future_window_size'],
                 dropout=model_parameters['dropout']).to(device)
     
     start_time = time.time()
@@ -68,7 +66,7 @@ def objective(trial, cfg_parameters, train_df, val_df, save_folder):
     duartime = time.time() - start_time
    
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'a')
-    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['future_window_size']},{model_parameters['dropout']},{model_parameters['alpha']},{duartime}")
+    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['dropout']},{model_parameters['alpha']},{duartime}")
     record_file.close()
     
     return best_val_accurace
@@ -82,7 +80,7 @@ if __name__ == "__main__":
     
     dataset_cfg = cfg_model_train['data_parameters']
     model_cfg = cfg_model_train['model_parameters']
-    model_cfg['device_id'] = '0'
+    model_cfg['device_id'] = '1'
     
     data_path = '{}/{}/time-process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
     save_folder = 'results/{}/{}/'.format(model_cfg['model_name'], dataset_cfg['dataset'])
@@ -93,7 +91,7 @@ if __name__ == "__main__":
     
     # record optimization
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'w')
-    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,future_window_size,dropout,alpha,duartime")
+    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,dropout,alpha,duartime")
     record_file.close()
     
     train_file_name = data_path + 'train.csv'   
@@ -103,6 +101,9 @@ if __name__ == "__main__":
     test_df = pd.read_csv(test_file_name)
 
     event_log = EventLogData(train_df, is_multi_attr=True)
+    train_data = event_log.generate_data_for_input(train_df)
+    trace_dict = analyse_suffix_variant(train_data[0], train_data[1])
+
     # spilit the dataset
     train_df, val_df = split_valid_df(train_df, dataset_cfg['valid_ratio'])
     
@@ -111,7 +112,7 @@ if __name__ == "__main__":
     max_len = event_log.feature_dict['max_len']
     
     study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=cfg_model_train['seed'])) # fixed parameter
-    study.optimize(lambda trial: objective(trial, model_cfg, train_df, val_df, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
+    study.optimize(lambda trial: objective(trial, model_cfg, train_df, val_df, trace_dict, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
     
     # record optimization history
     history = optuna.visualization.plot_optimization_history(study)

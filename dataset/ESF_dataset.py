@@ -7,17 +7,19 @@ class ESFDataset(APDataset):
     Dataset responsible for consuming scenarios and producing pairs of model inputs/outputs.
     """
 
-    def __init__(self, data_list, prediction_list, max_len, time_feature):
+    def __init__(self, data_list, prediction_list, max_len, time_feature, activity_num, trace_dict):
         super(ESFDataset, self).__init__(data_list)
 
         self.max_len = max_len
         self.future_activity = prediction_list
         assert len(data_list) == len(prediction_list), "inconsistent number of samples"
-        self.future_wz = max([len(i) for i in prediction_list])
+        # self.future_wz = max([len(i) for i in prediction_list])
         self.max_case_interval = time_feature['max_case_interval']
         self.min_case_interval= time_feature['min_case_interval']
         self.max_event_interval = time_feature['max_event_interval']
         self.min_event_interval = time_feature['min_event_interval']
+        self.trace_dict = trace_dict
+        self.activity_num = activity_num
         
 
     def __len__(self):
@@ -46,4 +48,10 @@ class ESFDataset(APDataset):
             for add_feature_seq in self.data_list[idx][2:]:
                 history_seq.append(np.array(get_w_list(add_feature_seq, self.max_len)))
         history_seq = np.array(history_seq, dtype=np.float32)
-        return history_seq,  np.array(get_w_list(self.future_activity[idx], self.future_wz))
+        suffix_dict = self.trace_dict.get(tuple(activity_seq), None)
+        softness = 0.01
+        suffix_array = np.ones((self.activity_num), dtype=np.float32)*softness
+        if suffix_dict:
+            soft_labels = np.array(list(suffix_dict.keys()))-1
+            suffix_array[soft_labels] = 1-softness
+        return history_seq,  np.array(self.future_activity[idx]), suffix_array

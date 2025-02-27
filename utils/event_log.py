@@ -82,7 +82,7 @@ class EventLogData():
     def _get_att_feature(self, df):
         # Get all the attributes except the case_id, activity and time
         case_num = len(np.unique(df['case:concept:name']))
-        attr_names = list(set(df.columns) - set(['case:concept:name', 'concept:name', 'time:timestamp']))
+        attr_names = list(set(df.columns) - set(['case:concept:name', 'concept:name', 'time:timestamp', 'predictable']))
         attr_names.sort()  # sort the columns to ensure the order
         # Transform every cat col in category dtype and impute MVs with dedicated level( Nan for numerical)
         for attr_name in attr_names:
@@ -109,7 +109,7 @@ class EventLogData():
         for case_id in all_cases:
             case_row = df[df['case:concept:name'] == case_id]
             case_row = case_row.sort_values(by=['time:timestamp'])
-            if len(case_row)<=max_len:
+            if len(case_row)<=max_len+1:
                 # Get the activity sequence and time sequence
                 activity_map = self.feature_dict['activity']
                 activity_seq = case_row['concept:name'].to_list()
@@ -136,13 +136,14 @@ class EventLogData():
                 is_valids = case_row['predictable'].to_list()
                 for i in range(1, len(activity_seq)):
                     prefix_feature = []
-                    if is_valids[i] == 1:
+                    if (is_valids[i] == 1) and (activity_seq[i] <= len(activity_map)):
                         for feature in feature_list:
                             prefix_feature.append(feature[:i])
                         input_data_list.append(prefix_feature)
-                        if (i+future_wz) >= len(activity_seq):
-                            future_activity_list.append(activity_seq[i:])
-                        else:
-                            future_activity_list.append(activity_seq[i:i+future_wz])
+                        future_activity_list.append(activity_seq[i])
+                        # if (i+future_wz) >= len(activity_seq):
+                        #     future_activity_list.append(activity_seq[i:])
+                        # else:
+                        #     future_activity_list.append(activity_seq[i:i+future_wz])
                 
         return [input_data_list, future_activity_list]
