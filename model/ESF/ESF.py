@@ -8,7 +8,7 @@ class EnableStateModel(nn.Module):
         self.ln = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_size, num_activities)
-        self.sigmoid = nn.Sigmoid()
+
         
     def forward(self, x):
         # RNN处理事件序列
@@ -18,31 +18,29 @@ class EnableStateModel(nn.Module):
         rnn_out = self.dropout(rnn_out[:, -1, :])
         # 全连接层输出启用状态
         out = self.fc(rnn_out)
-        out = self.sigmoid(out)
+        out = torch.softmax(out, dim=-1)
         return out
 
 class PredictionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_activities, dropout, num_layers=3):
+    def __init__(self, input_size, hidden_size, num_activities, dropout, num_layers=2):
         super(PredictionModel, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(hidden_size)
-        self.fc = nn.Linear(hidden_size, num_activities)
+        self.fc_1 = nn.Linear(hidden_size+num_activities, hidden_size)
+        self.fc_2 = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
     
-    def forward(self, x, first_stage_scores):
+    def forward(self, x, enable_states):
         rnn_out, _ = self.rnn(x)
         rnn_out = self.ln((rnn_out))
         final_hidden_state = self.dropout(rnn_out[:, -1, :])
-        all_activities_output = self.relu(self.fc(final_hidden_state))
-    
-        # 创建启用活动的掩码
-        activity_mask = (first_stage_scores >= 0.5)
+
+        second_stage_input = torch.cat([final_hidden_state, enable_states], dim=-1)
+        all_activities_output = self.relu(self.fc_1(second_stage_input))
+        all_activities_output = self.fc_2(all_activities_output)
         
-        # 对 logits 应用掩码
-        masked_logits = all_activities_output.masked_fill(~activity_mask, -1e4)
-        
-        return masked_logits  # 直接返回 logits
+        return all_activities_output  # 直接返回 logits
 
 
 class EnableStateFilterModel(nn.Module):

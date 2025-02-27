@@ -53,29 +53,28 @@ class ESFLoss(nn.Module):
         self.alpha = alpha          # 第一阶段损失的权重
         self.exp_factor = exp_factor
         # 定义第一阶段的损失函数（二元交叉熵损失）
-        self.bce_loss = nn.BCELoss()
+        self.stage1_loss = nn.CrossEntropyLoss()
         # 定义第二阶段的损失函数（交叉熵损失）
-        self.ce_loss = nn.CrossEntropyLoss()
+        self.stage2_loss = nn.CrossEntropyLoss()
     
-    def forward(self, outputs, targets, soft_labels):
+    def forward(self, outputs, targets, candidates_freq_data):
         """
         outputs: enable activity (batch_size, num_activities), prediction probility(batch_size, num_activities)
         targets: activities in future windows (batch_size,)
-        soft_labels: soft labels for the next_activity (batch_size, num_activities)
+        candidates_freq_data: frequence of candidates activity set(batch_size, num_activities)
         """
         enable_state, prediction = outputs
-        num_activities = enable_state.shape[1]
         # targets_stage1 = create_targets_stage1(targets, num_activities)
         # targets_stage2 = create_targets_stage2(targets, num_activities)
         targets_stage2 = targets-1
         # loss
-        loss_stage1 = self.bce_loss(enable_state, soft_labels)
-        loss_stage2 = self.ce_loss(prediction, targets_stage2)
-        weighted_loss_stage1  = loss_stage1 * torch.exp(1-loss_stage2)
-        weighted_loss_stage1 = loss_stage1
+        temperature = 1.0
+        soft_labels = torch.softmax(candidates_freq_data/temperature, dim=1)
+        loss_stage1 = self.stage1_loss(enable_state, soft_labels)
+        loss_stage2 = self.stage2_loss(prediction, targets_stage2)
         
         # 总损失
-        total_loss = self.alpha * weighted_loss_stage1  + loss_stage2
+        total_loss = self.alpha * loss_stage1  + (1-self.alpha)*loss_stage2
         
         return loss_stage1, loss_stage2, total_loss
 

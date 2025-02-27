@@ -41,13 +41,13 @@ def test_model(test_dataset, model, model_parameters, device):
     test_dataloader = DataLoader(test_dataset, batch_size=model_parameters['batch_size'], shuffle=False)
     with torch.no_grad():
         model.eval()
-        for seq, targets,soft_labels in test_dataloader:
+        for seq, targets,candidates_freq in test_dataloader:
             batch_data = seq.to(device)
             logits = model(batch_data)
             
             true_list.extend(targets.cpu().numpy().tolist())
             predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
-            var_num = torch.sum(soft_labels > 0.01, dim=1)
+            var_num = torch.sum(candidates_freq > 0, dim=1)
             var_num_list.extend(var_num.cpu().numpy().tolist())
     
     return true_list, predictions_list, var_num_list
@@ -77,10 +77,11 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         training_stg2_loss = 0
         num_train = 0
         
-        for seq, targets, soft_labels in train_dataloader:
+        for seq, targets, candidates_freq in train_dataloader:
             batch_data = seq.to(device)
+            candidates_freq_data = candidates_freq.to(device)
             logits = model(batch_data)
-            stg_1_loss, stg_2_loss, total_loss =  criterion(logits, targets.to(device), soft_labels.to(device))
+            stg_1_loss, stg_2_loss, total_loss =  criterion(logits, targets.to(device), candidates_freq_data)
 
             optimizer.zero_grad()
             total_loss.backward()

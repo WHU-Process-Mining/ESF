@@ -19,13 +19,13 @@ def ESF_parameters(trial, cfg):
     # define the parameter search space
     model_parameters = {}
     
-    model_parameters['dimension'] = trial.suggest_categorical('dimension', [8, 16, 32, 64, 128])
-    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [32, 64, 128, 256])
-    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [32, 64, 128, 256])
-    # model_parameters['threshold'] = trial.suggest_float('threshold', 0, 1)
-    model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
-    # model_parameters['alpha'] = trial.suggest_float('alpha', 1e-3, 1e3, log=True)
-    model_parameters['alpha'] = 1
+    model_parameters['dimension'] = trial.suggest_categorical('dimension', [4, 8, 16, 32, 64, 128])
+    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [16, 32, 64, 128, 256])
+    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [16, 32, 64, 128, 256])
+    # model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
+    model_parameters['alpha'] = trial.suggest_float('alpha', 0, 1)
+
+    model_parameters['dropout'] = 0.3
     model_parameters['learning_rate'] = cfg['learning_rate']
     model_parameters['num_epochs'] = cfg['num_epochs']
     model_parameters['batch_size'] = cfg['batch_size']
@@ -57,11 +57,11 @@ def objective(trial, cfg_parameters, train_df, val_df, trace_dict, save_folder):
     
     start_time = time.time()
     
-    best_model, best_val_accurace, _, _, _ = train_model(train_dataset, val_dataset, model, model_parameters, device, trial)
+    best_model_dict, best_val_accurace, _, _, _ = train_model(train_dataset, val_dataset, model, model_parameters, device, trial)
     current_best = trial.study.best_value if trial.number > 0 else 0
     if best_val_accurace > current_best:
         with open( f'{save_folder}/model/best_model.pth', 'wb') as fout:
-            torch.save(best_model, fout)
+            torch.save(best_model_dict, fout)
 
     duartime = time.time() - start_time
    

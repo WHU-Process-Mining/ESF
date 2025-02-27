@@ -49,9 +49,9 @@ class ESFDataset(APDataset):
                 history_seq.append(np.array(get_w_list(add_feature_seq, self.max_len)))
         history_seq = np.array(history_seq, dtype=np.float32)
         suffix_dict = self.trace_dict.get(tuple(activity_seq), None)
-        softness = 0.01
-        suffix_array = np.ones((self.activity_num), dtype=np.float32)*softness
+        candidates_freq_array = np.zeros((self.activity_num), dtype=np.float32)
         if suffix_dict:
-            soft_labels = np.array(list(suffix_dict.keys()))-1
-            suffix_array[soft_labels] = 1-softness
-        return history_seq,  np.array(self.future_activity[idx]), suffix_array
+            ids = np.array(list(suffix_dict.keys()))-1
+            values = np.array(list(suffix_dict.values()))
+            candidates_freq_array[ids] = values/np.sum(values)
+        return history_seq,  np.array(self.future_activity[idx]), candidates_freq_array
