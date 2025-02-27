@@ -24,7 +24,8 @@ class EnableStateModel(nn.Module):
 class PredictionModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_activities, dropout, num_layers=2):
         super(PredictionModel, self).__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.cross_feature = nn.Linear(input_size*2, hidden_size)
+        self.rnn = nn.RNN(hidden_size, hidden_size, num_layers, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(hidden_size)
         self.fc_1 = nn.Linear(hidden_size+num_activities, hidden_size)
@@ -32,7 +33,8 @@ class PredictionModel(nn.Module):
         self.relu = nn.ReLU()
     
     def forward(self, x, enable_states):
-        rnn_out, _ = self.rnn(x)
+        input_feature = self.cross_feature(torch.cat([x, x], dim=-1))
+        rnn_out, _ = self.rnn(input_feature)
         rnn_out = self.ln((rnn_out))
         final_hidden_state = self.dropout(rnn_out[:, -1, :])
 
