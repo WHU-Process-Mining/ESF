@@ -68,7 +68,7 @@ class ESFLoss(nn.Module):
         # targets_stage2 = create_targets_stage2(targets, num_activities)
         targets_stage2 = targets-1
         # loss
-        temperature = 1.0
+        temperature = max(1.0, enable_state.shape[1] / 10.0)
         soft_labels = torch.softmax(candidates_freq_data/temperature, dim=1)
         loss_stage1 = self.stage1_loss(enable_state, soft_labels)
         loss_stage2 = self.stage2_loss(prediction, targets_stage2)

@@ -18,7 +18,6 @@ class EnableStateModel(nn.Module):
         rnn_out = self.dropout(rnn_out[:, -1, :])
         # 全连接层输出启用状态
         out = self.fc(rnn_out)
-        out = torch.softmax(out, dim=-1)
         return out
 
 class PredictionModel(nn.Module):
@@ -41,7 +40,7 @@ class PredictionModel(nn.Module):
         second_stage_input = torch.cat([final_hidden_state, enable_states], dim=-1)
         all_activities_output = self.relu(self.fc_1(second_stage_input))
         all_activities_output = self.fc_2(all_activities_output)
-        
+        all_activities_output = torch.softmax(all_activities_output, dim=-1)
         return all_activities_output  # 直接返回 logits
 
 
@@ -112,4 +111,5 @@ class EnableStateFilterModel(nn.Module):
         # enable_state:(B, activity_num)
         enable_state = self.stage1(base_feature)
         prediction = self.stage2(input_feature, enable_state)
-        return enable_state, prediction
+        output = prediction*torch.softmax(enable_state, dim=-1)
+        return torch.softmax(enable_state, dim=-1), output

@@ -6,6 +6,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from utils.metric import metric_calculate
 from model.loss import ESFLoss, create_targets_stage2
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 def setup_seed(seed):
@@ -38,19 +39,22 @@ def test_model(test_dataset, model, model_parameters, device):
     predictions_list = []
     true_list = []
     var_num_list = []
+    test_loss = 0
+    criterion = ESFLoss(alpha=model_parameters['alpha'])
     test_dataloader = DataLoader(test_dataset, batch_size=model_parameters['batch_size'], shuffle=False)
     with torch.no_grad():
         model.eval()
         for seq, targets,candidates_freq in test_dataloader:
             batch_data = seq.to(device)
             logits = model(batch_data)
-            
+            _, _, total_loss =  criterion(logits, targets.to(device), candidates_freq.to(device))
             true_list.extend(targets.cpu().numpy().tolist())
             predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
             var_num = torch.sum(candidates_freq > 0, dim=1)
             var_num_list.extend(var_num.cpu().numpy().tolist())
+            test_loss += total_loss.item()
     
-    return true_list, predictions_list, var_num_list
+    return true_list, predictions_list, var_num_list, test_loss
 
 def train_model(train_dataset, val_dataset, model, model_parameters, device, trial=None):
     print("************* Training Model ***************")
@@ -67,6 +71,7 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
     max_patience_num = model_parameters['max_patience_num']
         
     optimizer = optim.AdamW(model.parameters(), lr=model_parameters['learning_rate'], weight_decay=1e-2)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
     # Train Model
     for epoch in range(model_parameters['num_epochs']):
         model.train()
@@ -99,12 +104,14 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         train_accurace,  _, _, train_fscore= metric_calculate(true_list, predictions_list)
         train_accuracy_plt.append(train_accurace)
 
+        
         # test the accurace in val dataset
-        val_truth_list, val_prediction_list, _ = test_model(val_dataset, model, model_parameters, device)
+        val_truth_list, val_prediction_list, _, val_loss = test_model(val_dataset, model, model_parameters, device)
         val_accurace,  _, _, val_fscore= metric_calculate(val_truth_list, val_prediction_list)
         val_accuracy_plt.append(val_accurace)
         print(f"epoch: {epoch}, train_total_loss:{training_loss/num_train}, train_stage1_loss:{training_stg1_loss/num_train}, train_stage2_loss:{training_stg2_loss/num_train}, train_accurace:{train_accurace}, val_accurace:{val_accurace},train_fscore:{train_fscore}, val_fscore:{val_fscore}")
         
+        scheduler.step(val_loss)
         # Early Stop
         
         if epoch == 0 or val_accurace >= best_val_accuracy:
