@@ -1,12 +1,12 @@
 seed: 0
 data_parameters:
   data_path: '/home/inspur/zhengchao/datasets'
-  # dataset: 'Receipt'
+  dataset: 'Receipt'
   # dataset: 'helpdesk2017'
   # dataset: 'BPIC2020_PrepaidTravelCost'
   # dataset: 'BPIC2020_InternationalDeclarations'
   # dataset: 'BPIC2020_DomesticDeclarations'
-  dataset: 'BPIC2020_RequestForPayment'
+  # dataset: 'BPIC2020_RequestForPayment'
   # dataset: 'Sepsis'
   # dataset: 'BPI2015_1'
   valid_ratio: 0.2
@@ -20,5 +20,5 @@ model_parameters:
   hidden_size: 128
   dropout: 0.5
   learning_rate: 0.001
-  max_patience_num: 24
+  max_patience_num: 50
   alpha: 10

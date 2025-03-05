@@ -48,10 +48,9 @@ def create_targets_stage2(future_activities, num_activities):
     return targets_stage2
 
 class ESFLoss(nn.Module):
-    def __init__(self, alpha=0.1, exp_factor=10):
+    def __init__(self, alpha=0.1):
         super(ESFLoss, self).__init__()
         self.alpha = alpha          # 第一阶段损失的权重
-        self.exp_factor = exp_factor
         # 定义第一阶段的损失函数（二元交叉熵损失）
         self.stage1_loss = nn.CrossEntropyLoss()
         # 定义第二阶段的损失函数（交叉熵损失）
@@ -64,12 +63,9 @@ class ESFLoss(nn.Module):
         candidates_freq_data: frequence of candidates activity set(batch_size, num_activities)
         """
         enable_state, prediction = outputs
-        # targets_stage1 = create_targets_stage1(targets, num_activities)
-        # targets_stage2 = create_targets_stage2(targets, num_activities)
         targets_stage2 = targets-1
         # loss
-        temperature = max(1.0, enable_state.shape[1] / 10.0)
-        soft_labels = torch.softmax(candidates_freq_data/temperature, dim=1)
+        soft_labels = (candidates_freq_data>0).float()
         loss_stage1 = self.stage1_loss(enable_state, soft_labels)
         loss_stage2 = self.stage2_loss(prediction, targets_stage2)
         
