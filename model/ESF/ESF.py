@@ -74,7 +74,9 @@ class EnableStateFilterModel(nn.Module):
             activity_feature = torch.clamp(activity_feature, min=0, max=self.activity_num)
             activity_embeddings = self.activity_embedding(activity_feature)
             unseen_activity_embedding = torch.mean(self.activity_embedding.weight[1:],dim=0)
-            activity_embeddings[unseen_idx] = unseen_activity_embedding
+            activity_embeddings = torch.where(unseen_idx.unsqueeze(-1), 
+                                  unseen_activity_embedding.unsqueeze(0).expand_as(activity_embeddings),
+                                  activity_embeddings)
         else:
             activity_embeddings = self.activity_embedding(activity_feature)
 
@@ -91,8 +93,10 @@ class EnableStateFilterModel(nn.Module):
                     catogery_feature = torch.clamp(catogery_feature, min=0, max=attr_num)
                     category_embedding = self.add_attr_embeddings[i](catogery_feature)
                     unseen_embedding = torch.mean(self.add_attr_embeddings[i].weight[1:],dim=0)
-                    category_embedding[unseen_idx] = unseen_embedding
-                    category_embeddings.append(category_embedding)
+                    category_embedding = torch.where(unseen_idx.unsqueeze(-1), 
+                                            unseen_embedding.unsqueeze(0).expand_as(category_embedding), 
+                                            category_embedding
+                                        )
                 else:
                     category_embeddings.append(self.add_attr_embeddings[i](catogery_feature))
             else:
