@@ -42,7 +42,7 @@ class PredictionModel(nn.Module):
         self.fc_2 = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
     
-    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='mean'):
+    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='max'):
         # (batch_size, num_activities)
         candidate_mask = torch.sigmoid(enable_states) >=self.threhold
 
@@ -51,6 +51,11 @@ class PredictionModel(nn.Module):
             masked_embeddings = batch_candidate_embeddings.clone()
             masked_embeddings[~candidate_mask.unsqueeze(-1).expand_as(batch_candidate_embeddings)] = float('-inf')
             global_candidate_embedding, _ = masked_embeddings.max(dim=1) # (batch_size, embedding_dim)
+
+            all_invalid = candidate_mask.sum(dim=1) == 0
+            if all_invalid.any():
+                default_embedding = activity_embeddings.mean(dim=0)  # (embedding_dim,)
+                global_candidate_embedding[all_invalid] = default_embedding.unsqueeze(0).expand(all_invalid.sum(), -1)
         elif pooling =='mean':
             weighted_candidate = torch.matmul(candidate_mask.float(), activity_embeddings)
             candidate_counts = candidate_mask.float().sum(dim=1, keepdim=True).clamp(min=1.0)
