@@ -37,7 +37,7 @@ class PredictionModel(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.W_Q = nn.Linear(input_size, embedding_size, bias=False)
         self.dropout = nn.Dropout(dropout)
-        self.ln = nn.LayerNorm(hidden_size)
+        self.ln = nn.LayerNorm(input_size)
         self.fc_1 = nn.Linear(embedding_size, hidden_size)
         self.fc_2 = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
@@ -55,9 +55,17 @@ class PredictionModel(nn.Module):
             weighted_candidate = torch.matmul(candidate_mask.float(), activity_embeddings)
             candidate_counts = candidate_mask.float().sum(dim=1, keepdim=True).clamp(min=1.0)
             global_candidate_embedding = weighted_candidate / candidate_counts  # (batch_size, embedding_dim)
+        elif pooling =='weighted_mean':
+            candidate_weights = torch.sigmoid(enable_states) * candidate_mask.float()
+            weighted_candidate = torch.matmul(candidate_weights, activity_embeddings)
+            candidate_counts = candidate_weights.sum(dim=1, keepdim=True).clamp(min=1.0)
+            global_candidate_embedding = weighted_candidate / candidate_counts
+        else:
+            raise ValueError("Invalid pooling method. Choose 'max' or 'mean'.")
 
         # (batch_size, seq_len, input_size)
         prefix_encoded = self.transformer_encoder(x)
+        prefix_encoded = self.ln(prefix_encoded)
         # (batch_size, seq_len, embedding_dim)
         H_proj = self.W_Q(prefix_encoded)
         # (batch_size, seq_len)

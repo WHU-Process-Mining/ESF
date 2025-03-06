@@ -52,7 +52,7 @@ class ESFLoss(nn.Module):
         super(ESFLoss, self).__init__()
         self.alpha = alpha          # 第一阶段损失的权重
         # 定义第一阶段的损失函数（二元交叉熵损失）
-        self.stage1_loss = nn.CrossEntropyLoss()
+        self.stage1_loss = nn.BCEWithLogitsLoss()
         # 定义第二阶段的损失函数（交叉熵损失）
         self.stage2_loss = nn.CrossEntropyLoss()
     
