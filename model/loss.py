@@ -56,6 +56,19 @@ class ESFLoss(nn.Module):
         # 定义第二阶段的损失函数（交叉熵损失）
         self.stage2_loss = nn.CrossEntropyLoss()
     
+    def smooth_labels(self, target, epsilon=0.1):
+        """
+        对二值标签进行平滑。
+        对于目标为1的标签,转换为1-epsilon;目标为0的标签,转换为epsilon。
+        
+        参数：
+            target: 张量,值为0或1
+            epsilon: 平滑系数
+        返回：
+            平滑后的标签张量
+        """
+        return target * (1 - epsilon) + (1 - target) * epsilon
+
     def forward(self, outputs, targets, candidates_freq_data):
         """
         outputs: enable activity (batch_size, num_activities), prediction probility(batch_size, num_activities)
@@ -65,7 +78,8 @@ class ESFLoss(nn.Module):
         enable_state, prediction = outputs
         targets_stage2 = targets-1
         # loss
-        soft_labels = (candidates_freq_data>0).float()
+        labels = (candidates_freq_data>0).float()
+        soft_labels = self.smooth_labels(labels)
         loss_stage1 = self.stage1_loss(enable_state, soft_labels)
         loss_stage2 = self.stage2_loss(prediction, targets_stage2)
         

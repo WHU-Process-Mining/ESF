@@ -55,6 +55,7 @@ if __name__ == "__main__":
             hidden_size_2=model_cfg['hidden_size'],
             add_attr_num = model_cfg['add_attr_num'],
             dropout=model_cfg['dropout'],
+            threhold=model_cfg['threhold'],
             ).to(device)
     
     best_model_dict, best_val_accurace, train_loss_plt, train_accuracy_plt, val_accuracy_plt = train_model(train_dataset, val_dataset, model, model_cfg, device)

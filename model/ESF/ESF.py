@@ -30,8 +30,9 @@ class EnableStateModel(nn.Module):
         return out
 
 class PredictionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_activities, embedding_size, dropout, num_layers=2):
+    def __init__(self, input_size, hidden_size, num_activities, embedding_size, dropout, threhold, num_layers=2):
         super(PredictionModel, self).__init__()
+        self.threhold = threhold
         encoder_layer = nn.TransformerEncoderLayer(d_model=input_size, nhead=1, dropout=dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.W_Q = nn.Linear(input_size, embedding_size, bias=False)
@@ -41,9 +42,9 @@ class PredictionModel(nn.Module):
         self.fc_2 = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
     
-    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='max'):
+    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='mean'):
         # (batch_size, num_activities)
-        candidate_mask = torch.sigmoid(enable_states) >=0.5
+        candidate_mask = torch.sigmoid(enable_states) >=self.threhold
 
         if pooling == 'max':
             batch_candidate_embeddings = activity_embeddings.unsqueeze(0).expand(candidate_mask.size(0), -1, -1)  # (batch_size, num_activities, embedding_dim)
@@ -67,9 +68,6 @@ class PredictionModel(nn.Module):
         # 计算候选活动的上下文表示：对前缀原始编码（prefix_encoded）加权求和
         candidate_ctx = torch.einsum('bt,bti->bi', alpha, H_proj) # (batch_size, embedding_dim)
         
-        # (batch_size, num_activities, embedding_dim*2)
-        # concat = torch.cat([candidate_ctx.unsqueeze(1).expand(-1,activity_embeddings.shape[0],-1), 
-        #                     activity_embeddings.unsqueeze(0).expand(x.shape[0],-1,-1)], dim=-1)
         all_activities_output = self.dropout(self.relu(self.fc_1(candidate_ctx)))
         all_activities_output = self.fc_2(all_activities_output)
         all_activities_output = all_activities_output.masked_fill(~candidate_mask, float('-1e4'))
@@ -77,7 +75,7 @@ class PredictionModel(nn.Module):
 
 
 class EnableStateFilterModel(nn.Module):
-    def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, dropout):
+    def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, dropout, threhold=0.5):
         super(EnableStateFilterModel, self).__init__()
         self.activity_num = activity_num
         self.dimension = dimension
@@ -96,7 +94,7 @@ class EnableStateFilterModel(nn.Module):
         numeric_dimension = add_attr_num.count(0) + 4  # 数值特征数量（额外特征中的数值特征 + 时间特征）
         self.input_feature_size = embed_dimension + numeric_dimension
         self.stage1 = EnableStateModel(dimension, hidden_size_1, activity_num, dropout)
-        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, dimension, dropout)
+        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, dimension, dropout, threhold)
 
     def get_input_feature(self, batch_data):
         # batch_data:(B, dim, max_len)
@@ -129,6 +127,7 @@ class EnableStateFilterModel(nn.Module):
                                             unseen_embedding.unsqueeze(0).expand_as(category_embedding), 
                                             category_embedding
                                         )
+                    category_embeddings.append(category_embedding)
                 else:
                     category_embeddings.append(self.add_attr_embeddings[i](catogery_feature))
             else:

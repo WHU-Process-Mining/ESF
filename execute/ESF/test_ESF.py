@@ -59,6 +59,7 @@ if __name__ == "__main__":
             hidden_size_2=hyperparameters['hidden_size_2'],
             add_attr_num = model_cfg['add_attr_num'],
             dropout=hyperparameters['dropout'],
+            threhold=hyperparameters['threhold']
             ).to(device)
     
     with open(f'{save_folder}/model/best_model.pth', 'rb') as fin:
@@ -66,7 +67,7 @@ if __name__ == "__main__":
 
     model.load_state_dict(best_model_dict)
 
-    true_list, predictions_list, var_num_list = test_model(test_dataset, model, model_cfg, device)
+    true_list, predictions_list, var_num_list, _ = test_model(test_dataset, model, model_cfg, device)
     evaluator = EvaluationMetric(save_folder+"/result/next_activity.csv", max_len)
     is_well = evaluator.prefix_metric_calculate(true_list, predictions_list, var_num_list)
     if is_well:
