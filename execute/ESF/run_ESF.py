@@ -19,13 +19,14 @@ def ESF_parameters(trial, cfg):
     # define the parameter search space
     model_parameters = {}
     
-    model_parameters['dimension'] = trial.suggest_categorical('dimension', [4, 8, 16, 32, 64, 128])
+    model_parameters['dimension'] = trial.suggest_categorical('dimension', [8, 16, 32, 64, 128])
     model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [16, 32, 64, 128, 256])
     model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [16, 32, 64, 128, 256])
     model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
-    model_parameters['threhold'] = trial.suggest_float('threhold', 0, 1)
+    # model_parameters['threhold'] = trial.suggest_float('threhold', 0, 1)
     model_parameters['alpha'] = trial.suggest_float('alpha', 0, 1)
 
+    model_parameters['threhold'] = 0.5
     model_parameters['learning_rate'] = cfg['learning_rate']
     model_parameters['num_epochs'] = cfg['num_epochs']
     model_parameters['batch_size'] = cfg['batch_size']
@@ -67,7 +68,7 @@ def objective(trial, cfg_parameters, train_df, val_df, trace_dict, save_folder):
     duartime = time.time() - start_time
    
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'a')
-    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['dropout']},model_parameters['threhold'],{model_parameters['alpha']},{duartime}")
+    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['dropout']},{model_parameters['threhold']},{model_parameters['alpha']},{duartime}")
     record_file.close()
     
     return best_val_accurace
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     max_len = event_log.feature_dict['max_len']
     
     study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=cfg_model_train['seed'])) # fixed parameter
-    study.optimize(lambda trial: objective(trial, model_cfg, train_df, val_df, trace_dict, save_folder), n_trials=20, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
+    study.optimize(lambda trial: objective(trial, model_cfg, train_df, val_df, trace_dict, save_folder), n_trials=30, gc_after_trial=True, callbacks=[lambda study, trial:gc.collect()])
     
     # record optimization history
     history = optuna.visualization.plot_optimization_history(study)

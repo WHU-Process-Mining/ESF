@@ -54,7 +54,8 @@ class ESFLoss(nn.Module):
         # 定义第一阶段的损失函数（二元交叉熵损失）
         self.stage1_loss = nn.BCEWithLogitsLoss()
         # 定义第二阶段的损失函数（交叉熵损失）
-        self.stage2_loss = nn.CrossEntropyLoss()
+        # self.stage2_loss = nn.CrossEntropyLoss()
+        self.stage2_loss = nn.NLLLoss()
     
     def smooth_labels(self, target, epsilon=0.1):
         """

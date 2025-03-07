@@ -17,7 +17,7 @@ if __name__ == "__main__":
     cfg_model_train = load_config_data("configs/ESF_Model.yaml")
     
     setup_seed(cfg_model_train['seed'])
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     dataset_cfg = cfg_model_train['data_parameters']
     model_cfg = cfg_model_train['model_parameters']
 
@@ -51,8 +51,8 @@ if __name__ == "__main__":
     model = EnableStateFilterModel(
             activity_num=model_cfg['activity_num'],
             dimension=model_cfg['dimension'],
-            hidden_size_1=model_cfg['hidden_size'],
-            hidden_size_2=model_cfg['hidden_size'],
+            hidden_size_1=model_cfg['hidden_size_1'],
+            hidden_size_2=model_cfg['hidden_size_2'],
             add_attr_num = model_cfg['add_attr_num'],
             dropout=model_cfg['dropout'],
             threhold=model_cfg['threhold'],

@@ -42,7 +42,7 @@ class PredictionModel(nn.Module):
         self.fc_2 = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
     
-    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='max'):
+    def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='weighted_mean'):
         # (batch_size, num_activities)
         candidate_mask = torch.sigmoid(enable_states) >=self.threhold
 
@@ -161,4 +161,10 @@ class EnableStateFilterModel(nn.Module):
         # enable_state:(B, activity_num)
         enable_state = self.stage1(base_feature)
         prediction = self.stage2(input_feature, enable_state, self.activity_embedding.weight[1:], mask)
+
+        p_enable = torch.sigmoid(enable_state)
+        candidate_probs = torch.softmax(prediction, dim=-1)
+        log_p_enable = torch.log(p_enable + 1e-8)
+        log_candidate = torch.log(candidate_probs + 1e-8)
+        prediction = log_p_enable + log_candidate
         return enable_state, prediction
