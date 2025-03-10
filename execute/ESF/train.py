@@ -49,7 +49,10 @@ def test_model(test_dataset, model, model_parameters, device):
             logits = model(batch_data)
             _, _, total_loss =  criterion(logits, targets.to(device), candidates_freq.to(device))
             true_list.extend(targets.cpu().numpy().tolist())
-            predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
+            if model_parameters['alpha'] == 1: # 第一阶段
+                predictions_list.extend((torch.argmax(logits[0], dim=1).cpu().numpy()+1).tolist())
+            else:
+                predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
             var_num = torch.sum(candidates_freq > 0, dim=1)
             var_num_list.extend(var_num.cpu().numpy().tolist())
             test_loss += total_loss.item()
@@ -93,7 +96,10 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
             optimizer.step()
             
             true_list.extend(targets.cpu().numpy().tolist())
-            predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
+            if model_parameters['alpha'] == 1: # 第一阶段
+                predictions_list.extend((torch.argmax(logits[0], dim=1).cpu().numpy()+1).tolist())
+            else:
+                predictions_list.extend((torch.argmax(logits[1], dim=1).cpu().numpy()+1).tolist())
             
             num_train += 1
             training_loss += total_loss.item()
@@ -115,7 +121,7 @@ def train_model(train_dataset, val_dataset, model, model_parameters, device, tri
         # Early Stop
         
         if epoch == 0 or val_accurace >= best_val_accuracy:
-            if epoch > 5:
+            if epoch > 10:
                 best_val_accuracy =  val_accurace
             patience_count = 0
             best_model_dict = model.state_dict()

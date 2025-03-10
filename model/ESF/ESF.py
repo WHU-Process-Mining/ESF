@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 class EnableStateModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_activities, dropout, num_layers=2):
@@ -10,8 +11,9 @@ class EnableStateModel(nn.Module):
         self.fc = nn.Linear(hidden_size, num_activities)
 
         
-    def forward(self, x, seq_lengths=None):
-        if seq_lengths is not None:
+    def forward(self, x, prefix_mask=None):
+        if prefix_mask is not None:
+            seq_lengths = prefix_mask.sum(dim=1)
             assert (seq_lengths > 0).all(), "存在长度为 0 的序列！"
             packed = nn.utils.rnn.pack_padded_sequence(x, seq_lengths.cpu().to(torch.int64), batch_first=True, enforce_sorted=False)
             packed_out, (h_n, c_n) = self.lstm(packed)
@@ -29,17 +31,74 @@ class EnableStateModel(nn.Module):
         out = self.fc(lstm_out)
         return out
 
+class PositionalEncoding(nn.Module):
+    """Inject sequence information in the prefix or suffix embeddings 
+    before feeding them to the stack of encoders or decoders respectively. 
+
+    Predominantly based on the PositionalEncoding module defined in 
+    https://github.com/pytorch/examples/tree/master/word_language_model. 
+    This reimplemetation, in contrast to the original one, caters for 
+    adding sequence information in input embeddings where the batch 
+    dimension comes first (``batch_first=True`). 
+
+    Parameters
+    ----------
+    d_model : int
+        The embedding dimension adopted by the associated Transformer. 
+    dropout : float
+        Dropout value. Dropout is applied over the sum of the input 
+        embeddings and the positional encoding vectors. 
+    max_len : int
+        the max length of the incoming sequence. By default 10000. 
+    """
+
+
+    def __init__(self, d_model, dropout=0.1, max_len=10000):
+        super(PositionalEncoding, self).__init__()
+
+        # Check if d_model is an integer and is even
+        assert isinstance(d_model, int), "d_model must be an integer"
+        assert d_model % 2 == 0, "d_model must be an even number"
+        
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term) 
+        self.register_buffer('pe', pe) # shape (max_len, d_model)
+
+    def forward(self, x):
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            Sequence of prefix event tokens or suffix event tokens fed 
+            to the positional encoding module. Shape 
+            (batch_size, window_size, d_model).
+
+        Returns
+        -------
+        Updated sequence tensor of the same shape, with sequence 
+        information injected into it, and dropout applied. 
+        """
+        x = x + self.pe[:x.size(1), :] # (batch_size, window_size, d_model)
+        return self.dropout(x)
+    
 class PredictionModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_activities, embedding_size, dropout, threhold, num_layers=2):
         super(PredictionModel, self).__init__()
         self.threhold = threhold
-        encoder_layer = nn.TransformerEncoderLayer(d_model=input_size, nhead=1, dropout=dropout, batch_first=True)
+        self.W_1 = nn.Linear(input_size, hidden_size, bias=False)
+        self.positional_encoding = PositionalEncoding(hidden_size)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=4, dropout=dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.W_Q = nn.Linear(input_size, embedding_size, bias=False)
+        self.W_2 = nn.Linear(embedding_size, hidden_size, bias=False)
         self.dropout = nn.Dropout(dropout)
-        self.ln = nn.LayerNorm(input_size)
-        self.fc_1 = nn.Linear(embedding_size, hidden_size)
-        self.fc_2 = nn.Linear(hidden_size, num_activities)
+        self.ln = nn.LayerNorm(hidden_size)
+        # self.fc_1 = nn.Linear(embedding_size, hidden_size)
+        self.fc = nn.Linear(hidden_size, num_activities)
         self.relu = nn.ReLU()
     
     def forward(self, x, enable_states, activity_embeddings, prefix_mask, pooling='weighted_mean'):
@@ -68,21 +127,23 @@ class PredictionModel(nn.Module):
         else:
             raise ValueError("Invalid pooling method. Choose 'max' or 'mean'.")
 
-        # (batch_size, seq_len, input_size)
-        prefix_encoded = self.transformer_encoder(x)
+        # (batch_size, seq_len, hidden_size)
+        x = self.W_1(x)
+        x = self.positional_encoding(x* math.sqrt(x.shape[-1]))
+        prefix_encoded = self.transformer_encoder(x,)
         prefix_encoded = self.ln(prefix_encoded)
-        # (batch_size, seq_len, embedding_dim)
-        H_proj = self.W_Q(prefix_encoded)
+        # (batch_size, hidden_size)
+        global_candidate_embedding = self.W_2(global_candidate_embedding)
         # (batch_size, seq_len)
-        scores = torch.einsum('be,bte->bt', global_candidate_embedding, H_proj) / torch.sqrt(torch.tensor([global_candidate_embedding.shape[-1]], dtype=torch.float32,device=x.device))
+        scores = torch.einsum('bh,bth->bt', global_candidate_embedding, prefix_encoded) / torch.sqrt(torch.tensor([global_candidate_embedding.shape[-1]], dtype=torch.float32,device=x.device))
         extended_mask = ~prefix_mask.bool()  # (B, seq_len)，True 表示需要屏蔽的位置
         scores = scores.masked_fill(extended_mask, float('-1e4'))
         alpha = torch.softmax(scores, dim=-1)
         # 计算候选活动的上下文表示：对前缀原始编码（prefix_encoded）加权求和
-        candidate_ctx = torch.einsum('bt,bti->bi', alpha, H_proj) # (batch_size, embedding_dim)
+        candidate_ctx = torch.einsum('bt,bth->bh', alpha, prefix_encoded) # (batch_size, hidden_size)
         
-        all_activities_output = self.dropout(self.relu(self.fc_1(candidate_ctx)))
-        all_activities_output = self.fc_2(all_activities_output)
+        # all_activities_output = self.dropout(self.relu(self.fc_1(candidate_ctx)))
+        all_activities_output = self.fc(candidate_ctx)
         all_activities_output = all_activities_output.masked_fill(~candidate_mask, float('-1e4'))
         return all_activities_output  # 直接返回 logits
 
@@ -91,23 +152,24 @@ class EnableStateFilterModel(nn.Module):
     def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, dropout, threhold=0.5):
         super(EnableStateFilterModel, self).__init__()
         self.activity_num = activity_num
-        self.dimension = dimension
         self.add_attr_num = add_attr_num
-        self.activity_embedding = nn.Embedding(activity_num + 1, dimension, padding_idx=0)
+        activity_dim = min(600, round(1.6 * activity_num**0.56))
+        self.activity_embedding = nn.Embedding(activity_num + 1, activity_dim, padding_idx=0)
         self.add_attr_embeddings = nn.ModuleList()
+        embed_dimension = activity_dim
         for attr_num in add_attr_num:
             if attr_num > 0:
-                embedding = nn.Embedding(attr_num + 1, dimension, padding_idx=0)
+                cat_dim = min(600, round(1.6 * attr_num**0.56))
+                embedding = nn.Embedding(attr_num + 1, cat_dim, padding_idx=0)
+                embed_dimension += cat_dim
                 self.add_attr_embeddings.append(embedding)
             else:
                 self.add_attr_embeddings.append(None)  # For numeric features
 
-        # input feature size
-        embed_dimension = (1 + sum(1 for num in add_attr_num if num > 0)) * dimension  # 活动特征和分类特征的嵌入维度总和
         numeric_dimension = add_attr_num.count(0) + 4  # 数值特征数量（额外特征中的数值特征 + 时间特征）
         self.input_feature_size = embed_dimension + numeric_dimension
-        self.stage1 = EnableStateModel(dimension, hidden_size_1, activity_num, dropout)
-        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, dimension, dropout, threhold)
+        self.stage1 = EnableStateModel(activity_dim, hidden_size_1, activity_num, dropout)
+        self.stage2 = PredictionModel(self.input_feature_size, hidden_size_2, activity_num, activity_dim, dropout, threhold)
 
     def get_input_feature(self, batch_data):
         # batch_data:(B, dim, max_len)
@@ -159,12 +221,14 @@ class EnableStateFilterModel(nn.Module):
         base_feature, input_feature = self.get_input_feature(batch_data)
         assert input_feature.shape[2] == self.input_feature_size, "incorrect feature size"
         # enable_state:(B, activity_num)
-        enable_state = self.stage1(base_feature)
+        enable_state = self.stage1(base_feature, mask)
         prediction = self.stage2(input_feature, enable_state, self.activity_embedding.weight[1:], mask)
 
         p_enable = torch.sigmoid(enable_state)
         candidate_probs = torch.softmax(prediction, dim=-1)
         log_p_enable = torch.log(p_enable + 1e-8)
         log_candidate = torch.log(candidate_probs + 1e-8)
+        if self.stage2.threhold == 0: # 第二阶段
+            return enable_state, prediction
         prediction = log_p_enable + log_candidate
         return enable_state, prediction

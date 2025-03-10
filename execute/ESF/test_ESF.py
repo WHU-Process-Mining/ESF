@@ -54,12 +54,12 @@ if __name__ == "__main__":
     
     model = EnableStateFilterModel(
             activity_num=model_cfg['activity_num'],
-            dimension=hyperparameters['dimension'],
+            dimension=1,
             hidden_size_1=hyperparameters['hidden_size_1'],
             hidden_size_2=hyperparameters['hidden_size_2'],
             add_attr_num = model_cfg['add_attr_num'],
-            dropout=hyperparameters['dropout'],
-            threhold=hyperparameters['threhold']
+            dropout=0.1,
+            threhold=hyperparameters['threhold'],
             ).to(device)
     
     with open(f'{save_folder}/model/best_model.pth', 'rb') as fin:

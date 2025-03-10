@@ -6,10 +6,11 @@ from pandas.api.types import is_numeric_dtype
 import pandas as pd
 
 def get_time_feature(time_seq):
-    case_interval = [i[-1]-i[0]  for i in time_seq]
+    final_case_interval = [i[-1]-i[0]  for i in time_seq]
+    first_case_interval = [i[1]-i[0]  for i in time_seq]
     event_interval = [[i[j] - i[j-1] for j in range(1, len(i))]  for i in time_seq]
-    max_case_interval = max([86400 * i.days + i.seconds  for i in case_interval])
-    min_case_interval = min([86400 * i.days + i.seconds  for i in case_interval])
+    max_case_interval = max([86400 * i.days + i.seconds  for i in final_case_interval])
+    min_case_interval = min([86400 * i.days + i.seconds  for i in first_case_interval])
     max_event_interval = max([max(86400 * j.days + j.seconds for j in i)  for i in event_interval])
     min_event_interval = min([min(86400 * j.days + j.seconds for j in i)  for i in event_interval])
 

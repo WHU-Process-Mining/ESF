@@ -78,14 +78,27 @@ class ESFLoss(nn.Module):
         """
         enable_state, prediction = outputs
         targets_stage2 = targets-1
+        if self.alpha == 1: # 第一阶段
+            loss = nn.CrossEntropyLoss()
+            loss_stage1 = loss(enable_state, targets_stage2)
+            return loss_stage1, torch.zeros_like(loss_stage1,device=loss_stage1.device), loss_stage1
+        if self.alpha == 0: # 第二阶段
+            loss = nn.CrossEntropyLoss()
+            loss_stage2 = loss(prediction, targets_stage2)
+            return torch.zeros_like(loss_stage2,device=loss_stage2.device), loss_stage2, loss_stage2
         # loss
         labels = (candidates_freq_data>0).float()
         soft_labels = self.smooth_labels(labels)
         loss_stage1 = self.stage1_loss(enable_state, soft_labels)
+        # batch_size = enable_state.shape[0]
+        # batch_indices = torch.arange(batch_size, device=enable_state.device)
+        # enable_state = torch.sigmoid(enable_state)
+        # loss_stage1 = -torch.mean(torch.log(enable_state[batch_indices, targets_stage2] + 1e-8))
+
         loss_stage2 = self.stage2_loss(prediction, targets_stage2)
         
         # 总损失
-        total_loss = self.alpha * loss_stage1  + (1-self.alpha)*loss_stage2
+        total_loss = self.alpha * loss_stage1  + loss_stage2
         
         return loss_stage1, loss_stage2, total_loss
 
