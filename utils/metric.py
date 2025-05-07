@@ -17,7 +17,6 @@ class EvaluationMetric():
     def prefix_metric_calculate(self, truth_list, prediction_list, prefix_suf_variant_list):
 #       Evaluate over all the prefixes (k) and save the results
         k, size, accuracies,fscores, precisions, recalls = [],[],[],[],[],[]
-        idxs = []
         
         prefix_suffix_predict = {}
         prefix_suffix_label = {}
@@ -56,17 +55,7 @@ class EvaluationMetric():
         print('Average recall across all prefixes:', recall)   
         print('Average f-score across all prefixes:', fscore) 
         
-        if os.path.exists(self.save_file):
-            df = pd.read_csv(self.save_file)
-            old_acc = df.iloc[-1]['accuracy']
-        else:
-            old_acc = 0.0
-        
-        if accuracy>old_acc:
-            results_df = pd.DataFrame({"suffix_var_num":k, "sample size":size, "accuracy":accuracies, 
+        results_df = pd.DataFrame({"suffix_var_num":k, "sample size":size, "accuracy":accuracies, 
                 "precision":precisions, "recall":recalls,  "fscore": fscores,})
-            results_df.sort_values(by="suffix_var_num", inplace=True)
-            results_df.to_csv(self.save_file, index=False)
-            return True
-        else:
-            return False
+        results_df.sort_values(by="suffix_var_num", inplace=True)
+        results_df.to_csv(self.save_file, index=False)

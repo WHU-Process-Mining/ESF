@@ -149,7 +149,7 @@ class PredictionModel(nn.Module):
 
 
 class EnableStateFilterModel(nn.Module):
-    def __init__(self, activity_num, dimension, hidden_size_1, hidden_size_2, add_attr_num, dropout, threhold=0.5):
+    def __init__(self, activity_num, hidden_size_1, hidden_size_2, add_attr_num, dropout, threhold=0.5):
         super(EnableStateFilterModel, self).__init__()
         self.activity_num = activity_num
         self.add_attr_num = add_attr_num

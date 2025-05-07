@@ -50,7 +50,6 @@ if __name__ == "__main__":
 
     model = EnableStateFilterModel(
             activity_num=model_cfg['activity_num'],
-            dimension=model_cfg['dimension'],
             hidden_size_1=model_cfg['hidden_size_1'],
             hidden_size_2=model_cfg['hidden_size_2'],
             add_attr_num = model_cfg['add_attr_num'],

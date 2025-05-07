@@ -19,13 +19,13 @@ def ESF_parameters(trial, cfg):
     # define the parameter search space
     model_parameters = {}
     
-    model_parameters['dimension'] = 1
-    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [32, 64, 128, 256])
-    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [64, 128, 256, 512])
+    model_parameters['hidden_size_1'] = trial.suggest_categorical('hidden_size_1', [16, 32, 64, 128, 256,512])
+    model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [16, 32, 64, 128, 256, 512])
+
     model_parameters['threhold'] = trial.suggest_float('threhold', 0, 1)
-    model_parameters['alpha'] = trial.suggest_float('alpha', 1e-1, 1e2, log=True)
+    model_parameters['alpha'] = trial.suggest_float('alpha', 0, 1)
+
     model_parameters['dropout'] = 0.2
-    # model_parameters['threhold'] = 0.5
     model_parameters['learning_rate'] = cfg['learning_rate']
     model_parameters['num_epochs'] = cfg['num_epochs']
     model_parameters['batch_size'] = cfg['batch_size']
@@ -42,14 +42,12 @@ def objective(trial, cfg_parameters, train_df, val_df, trace_dict, save_folder):
     val_data = event_log.generate_data_for_input(val_df)
     train_dataset = ESFDataset(train_data[0], train_data[1], max_len, event_log.feature_dict['time'], model_parameters['activity_num'], trace_dict)
     val_dataset = ESFDataset(val_data[0], val_data[1], max_len, event_log.feature_dict['time'], model_parameters['activity_num'], trace_dict)
-
     print(f"seed: {cfg_model_train['seed']}")
     print(f"dataset: {dataset_cfg['dataset']}, train size: {len(train_dataset)}, valid size:{len(val_dataset)}")
 
     device = 'cuda:'+ cfg_parameters['device_id'] if torch.cuda.is_available() else 'cpu'
     model = EnableStateFilterModel(
                 activity_num=model_parameters['activity_num'],
-                dimension=model_parameters['dimension'],
                 hidden_size_1=model_parameters['hidden_size_1'],
                 hidden_size_2=model_parameters['hidden_size_2'],
                 add_attr_num=model_parameters['add_attr_num'],
@@ -67,7 +65,7 @@ def objective(trial, cfg_parameters, train_df, val_df, trace_dict, save_folder):
     duartime = time.time() - start_time
    
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'a')
-    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['dimension']},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['dropout']},{model_parameters['threhold']},{model_parameters['alpha']},{duartime}")
+    record_file.write(f"\n{trial.number},{best_val_accurace},{model_parameters['hidden_size_1']},{model_parameters['hidden_size_2']},{model_parameters['dropout']},{model_parameters['threhold']},{model_parameters['alpha']},{duartime}")
     record_file.close()
     
     return best_val_accurace
@@ -81,7 +79,7 @@ if __name__ == "__main__":
     
     dataset_cfg = cfg_model_train['data_parameters']
     model_cfg = cfg_model_train['model_parameters']
-    model_cfg['device_id'] = '1'
+    model_cfg['device_id'] = '0'
     
     data_path = '{}/{}/time-process/'.format(dataset_cfg['data_path'], dataset_cfg['dataset'])
     save_folder = 'results/{}/{}/'.format(model_cfg['model_name'], dataset_cfg['dataset'])
@@ -92,7 +90,7 @@ if __name__ == "__main__":
     
     # record optimization
     record_file = open(f'{save_folder}/optimize/opt_history.txt', 'w')
-    record_file.write("tid,score,dimension,hidden_size_1,hidden_size_2,dropout,threhold,alpha,duartime")
+    record_file.write("tid,score,hidden_size_1,hidden_size_2,dropout,threhold,alpha,duartime")
     record_file.close()
     
     train_file_name = data_path + 'train.csv'   

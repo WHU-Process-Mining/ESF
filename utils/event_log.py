@@ -1,23 +1,18 @@
 import numpy as np
 import math
-from datetime import datetime
 from sklearn.model_selection import train_test_split
 from pandas.api.types import is_numeric_dtype
 import pandas as pd
 
 def get_time_feature(time_seq):
-    final_case_interval = [i[-1]-i[0]  for i in time_seq]
-    first_case_interval = [i[1]-i[0]  for i in time_seq]
+    case_interval = [[i[j] - i[0] for j in range(1, len(i))]  for i in time_seq]
     event_interval = [[i[j] - i[j-1] for j in range(1, len(i))]  for i in time_seq]
-    max_case_interval = max([86400 * i.days + i.seconds  for i in final_case_interval])
-    min_case_interval = min([86400 * i.days + i.seconds  for i in first_case_interval])
-    max_event_interval = max([max(86400 * j.days + j.seconds for j in i)  for i in event_interval])
-    min_event_interval = min([min(86400 * j.days + j.seconds for j in i)  for i in event_interval])
 
-    return {'max_case_interval': max_case_interval,
-            'min_case_interval': min_case_interval,
-            'max_event_interval': max_event_interval,
-            'min_event_interval': min_event_interval}
+    mean_case_interval = np.mean([86400 * item.days + item.seconds for sublist in case_interval for item in sublist])
+    mean_event_interval = np.mean([86400 * item.days + item.seconds for sublist in event_interval for item in sublist])
+
+    return {'mean_case_interval': mean_case_interval,
+            'mean_event_interval': mean_event_interval}
 
 def get_category_feature(category_set):
     category_list = [str(x) if isinstance(x, float) and math.isnan(x) else x for x in category_set]
@@ -68,7 +63,7 @@ class EventLogData():
         self.all_activities = np.unique(df['concept:name'])
         self.feature_dict = {}
         self.feature_dict['activity'] = dict(zip(self.all_activities, range(1, len(self.all_activities) + 1)))
-        df['time:timestamp'] = pd.to_datetime(df['time:timestamp'], format='%Y-%m-%d %H:%M:%S', utc=True)
+        df['time:timestamp'] = pd.to_datetime(df['time:timestamp'], utc=True)
         time_list = df.groupby('case:concept:name')['time:timestamp'].apply(list).tolist()
         self.feature_dict['max_len'] = max([len(i) for i in time_list])-1 # max len of the prefix
         self.feature_dict['time'] = get_time_feature(time_list)
@@ -103,7 +98,7 @@ class EventLogData():
 
     def generate_data_for_input(self, df, future_wz=1):
         all_cases = np.unique(df['case:concept:name'])
-        df['time:timestamp'] = pd.to_datetime(df['time:timestamp'], format='%Y-%m-%d %H:%M:%S', utc=True)
+        df['time:timestamp'] = pd.to_datetime(df['time:timestamp'], utc=True)
         input_data_list = [] # [[[activity_seq][time_seq]...[]]]
         future_activity_list = [] # [[activity_seq]]
         max_len = self.feature_dict['max_len']

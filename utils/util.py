@@ -63,18 +63,16 @@ def get_time_feature(time_series:list, time_feature):
                 time interval since the midnight,
                 day in a week)
     """
-    max_case_interval = time_feature['max_case_interval']
-    min_case_interval= time_feature['min_case_interval']
-    max_event_interval = time_feature['max_event_interval']
-    min_event_interval = time_feature['min_event_interval']
+    mean_case_interval = time_feature['mean_case_interval']
+    mean_event_interval = time_feature['mean_event_interval']
 
     # timesincecasestart
     timesincecasestart = [i-time_series[0] for i in time_series]
     raw_time_1 = [86400 * i.days + i.seconds for i in timesincecasestart]
-    time_1 = [0]+[(i-min_case_interval)/(max_case_interval-min_case_interval) for i in raw_time_1[1:]]
+    time_1 = raw_time_1/mean_case_interval
     # timesincelastevent
     time_2 = [0] + [raw_time_1[i] - raw_time_1[i-1] for i in range(1, len(raw_time_1))]
-    time_2 = [0] + [(i-min_event_interval)/(max_event_interval-min_event_interval) for i in time_2[1:]]
+    time_2 = time_2/mean_event_interval
     # timesincemidnight
     timesincemidnight = [i-i.replace(hour=0, minute=0, second=0, microsecond=0) for i in time_series]
     time_3 = [i.seconds/86400 for i in timesincemidnight]
