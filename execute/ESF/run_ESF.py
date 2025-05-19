@@ -23,9 +23,9 @@ def ESF_parameters(trial, cfg):
     model_parameters['hidden_size_2'] = trial.suggest_categorical('hidden_size_2', [16, 32, 64, 128, 256, 512])
 
     model_parameters['threhold'] = trial.suggest_float('threhold', 0, 1)
-    model_parameters['alpha'] = trial.suggest_float('alpha', 0, 1)
+    model_parameters['alpha'] = trial.suggest_float('alpha', 1e-3, 1e3)
+    model_parameters['dropout'] = trial.suggest_float('dropout', 0, 1)
 
-    model_parameters['dropout'] = 0.2
     model_parameters['learning_rate'] = cfg['learning_rate']
     model_parameters['num_epochs'] = cfg['num_epochs']
     model_parameters['batch_size'] = cfg['batch_size']

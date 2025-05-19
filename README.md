@@ -1,4 +1,4 @@
-# A Two-Stage Predictive Process Monitoring Approach with Enabled State Filtering for High-Variability Suffixes
+# A Two-Stage Predictive Process Monitoring Approach with Enabled State Filtering for Variable Suffix Scenarios
 
 ## Installation
 
@@ -43,4 +43,15 @@ Evaluate the model:
 
     python execute/ESF/test_ESF.py
 
+If you the code from this repository, please cite our paper:
+```
+@inproceedings{Chao Zheng,
+  title={A Two-Stage Predictive Process Monitoring Approach with Enabled State Filtering for Variable Suffix Scenarios},
+  author={Chao Zheng, Jian Wang, Bing Li, Chao Zheng},
+  booktitle={2025 IEEE International Conference on Web Services (ICWS)},
+  year={2025},
+  pages={},
+  publisher={IEEE}
+}
+```
 

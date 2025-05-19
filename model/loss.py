@@ -86,7 +86,7 @@ class ESFLoss(nn.Module):
         loss_stage2 = self.stage2_loss(prediction, targets_stage2)
         
         # 总损失
-        total_loss = self.alpha * loss_stage1  + (1-self.alpha)*loss_stage2
+        total_loss = self.alpha * loss_stage1  + loss_stage2
         
         return loss_stage1, loss_stage2, total_loss
 
